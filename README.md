@@ -51,7 +51,7 @@ The system focuses on generating a synthetic "Scope of Work" clause for a constr
 
 ## Deployed URL
 The application is deployed and accessible at:  
-[https://synthetic-contract-generator.onrender.com/](#) *(Placeholder URL)*
+[https://synthetic-contract-generator.onrender.com/]
 
 ## Conclusion
 The Synthetic Construction Contract Data Generator successfully delivers a privacy-preserving, realistic "Scope of Work" clause for construction contracts. It combines LLM-powered generation with robust validation with a user-friendly Streamlit interface, laying the foundation for a scalable synthetic data solution in the construction industry.
