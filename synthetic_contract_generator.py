@@ -9,31 +9,44 @@ A comprehensive system for generating synthetic construction contracts with:
 - LLM-powered content generation with fallback mechanisms
 - Privacy-preserving synthetic data generation
 
-Author: AI Assistant
+Author: MERVIN JOSEPH L
 Date: June 2025
+Version: 1.0.0
 """
 
 import os
 import re
-import json
+import json 
 import logging
 import random
 import streamlit as st
 import sys
-from typing import Dict, List, Optional, Tuple, Any, Set
+from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, asdict, field
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 import google.generativeai as genai
 from faker import Faker
 import pandas as pd
 
-# Configure logging for better debugging and monitoring
 logging.basicConfig(
-    level=logging.INFO, 
-    format='%(asctime)s - %(levelname)s - %(module)s - %(message)s'
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(module)s - %(funcName)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def get_error_location(cls_instance=None) -> str:
+    """Dynamically gets the class and function name for error logging."""
+    try:
+        frame = sys._getframe(1) 
+        func_name = frame.f_code.co_name
+        if cls_instance:
+            class_name = cls_instance.__class__.__name__
+            return f"{class_name}.{func_name}"
+        return func_name
+    except Exception: 
+        return "UnknownLocation"
 
 class ContractType(Enum):
     """Enumeration of construction contract types with descriptions."""
@@ -66,1235 +79,921 @@ class ContractArticle(Enum):
 
 @dataclass
 class ContractRequirements:
-    """
-    Data structure containing all requirements for contract generation.
-    Includes project details, compliance requirements, and risk factors.
-    """
+    """Data structure for contract generation requirements."""
     project_type: str
     contract_value: int
     duration_days: int
     location: str
     complexity: str
-    special_requirements: List[str] = field(default_factory=list)
-    regulatory_requirements: List[str] = field(default_factory=list)
-    risk_factors: List[str] = field(default_factory=list)
     selected_articles: List[str] = field(default_factory=list)
+    special_requirements: List[str] = field(default_factory=list)
+    regulatory_requirements: List[str] = field(default_factory=list) # Added for completeness
+    risk_factors: List[str] = field(default_factory=list) # Added for completeness
 
 @dataclass
 class GeneratedContractData:
-    """
-    Comprehensive data structure for all generated contract information.
-    Contains anonymized parties, financial terms, and legal requirements.
-    """
-    # Basic contract information
+    """Comprehensive data structure for generated contract information."""
     contract_date: str
     project_name: str
     project_description: str
-    
-    # Contract parties with anonymized details
     owner_name: str
     owner_representative: str
     contractor_name: str
     contractor_address: str
     contractor_representative: str
-    
-    # Financial terms and payment structure
     contract_amount: str
     contract_type: str
     payment_terms: str
     retainage_percentage: str
-    
-    # Project timeline and milestones
     start_date: str
     completion_date: str
     project_duration: str
-    
-    # Legal and compliance requirements
     governing_law: str
     dispute_resolution: str
     insurance_requirements: List[str] = field(default_factory=list)
     bond_requirements: List[str] = field(default_factory=list)
-    
-    # Technical specifications and standards
     building_codes: List[str] = field(default_factory=list)
     quality_standards: List[str] = field(default_factory=list)
     safety_requirements: List[str] = field(default_factory=list)
 
 class SyntheticDataGenerator:
-    """
-    Generates realistic but completely synthetic data for construction contracts.
-    Ensures no real-world entities are used while maintaining data realism.
-    """
-    
+    """Generates realistic but synthetic data for construction contracts."""
+
+    # This function is to generate a random data using faker library
     def __init__(self, seed: Optional[int] = None):
-        """
-        Initialize the synthetic data generator with optional seed for reproducibility.
-        
-        Args:
-            seed: Random seed for consistent data generation across runs
-        """
-        if seed is None:
-            seed = random.randint(1, 10000)
-        
-        self.fake = Faker()
-        Faker.seed(seed)
-        random.seed(seed)
-        
-        # Define realistic but generic project types
-        self.project_types = [
-            "Highway Construction and Reconstruction",
-            "Bridge Design and Construction", 
-            "Municipal Water Treatment Facility",
-            "Educational Institution Building",
-            "Public Safety Complex",
-            "Airport Infrastructure Development",
-            "Transit System Expansion",
-            "Environmental Remediation Project",
-            "Energy Infrastructure Installation",
-            "Telecommunications Network Deployment",
-            "Residential Development Complex",
-            "Commercial Office Building",
-            "Industrial Manufacturing Facility"
-        ]
-        
-        # Generic location templates
-        self.location_templates = [
-            "Metropolitan Area Alpha", "City Beta Region", "County Gamma District",
-            "Township Delta Zone", "Municipal Area Epsilon", "Regional Sector Zeta"
-        ]
-        
+        try:
+            if seed is None:
+                seed = random.randint(1, 10000)
+            self.fake = Faker()
+            Faker.seed(seed)
+            random.seed(seed)
+            self.project_types = [
+                "Highway Construction and Reconstruction", "Bridge Design and Construction",
+                "Municipal Water Treatment Facility", "Educational Institution Building",
+                "Public Safety Complex", "Airport Infrastructure Development",
+                "Transit System Expansion", "Environmental Remediation Project",
+                "Energy Infrastructure Installation", "Telecommunications Network Deployment",
+                "Residential Development Complex", "Commercial Office Building",
+                "Industrial Manufacturing Facility"
+            ]
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
+
+    # This function generates a full set of contract data including project details, dates, parties, and compliance requirements based on the given contract inputs.
     def generate_contract_data(self, requirements: ContractRequirements) -> GeneratedContractData:
-        """
-        Generate comprehensive synthetic contract data based on provided requirements.
-        All generated data is anonymized and contains no real-world identifiers.
-        
-        Args:
-            requirements: Contract requirements specifying project parameters
-            
-        Returns:
-            GeneratedContractData: Complete synthetic contract information
-        """
-        
-        # Generate realistic but anonymous dates
-        contract_date = self.fake.date_between(start_date='-3m', end_date='+1m')
-        start_date = contract_date + timedelta(days=random.randint(15, 60))
-        completion_date = start_date + timedelta(days=requirements.duration_days)
-        
-        # Create anonymous party names using generic templates
-        contractor_types = ["Construction", "Builders", "Engineering", "Development", "Infrastructure"]
-        contractor_entities = ["LLC", "Inc.", "Corp.", "Co."]
-        
-        # Generate anonymous but realistic project name
-        project_suffix = self.fake.catch_phrase().replace(self.fake.company(), "Generic Corp")
-        
-        return GeneratedContractData(
-            # Basic contract information with anonymized details
-            contract_date=contract_date.strftime("%B %d, %Y"),
-            project_name=f"{requirements.project_type} - Phase {random.randint(1,5)}",
-            project_description=f"Comprehensive {requirements.project_type.lower()} project including all associated work and deliverables",
-            
-            # Anonymized party information
-            owner_name=f"Municipal Authority Alpha",
-            owner_representative=f"[OWNER_REP_NAME], P.E.",
-            contractor_name=f"[CONTRACTOR_COMPANY] {random.choice(contractor_entities)}",
-            contractor_address=f"[CONTRACTOR_ADDRESS], [CITY], [STATE] [ZIP]",
-            contractor_representative=f"[CONTRACTOR_REP_NAME]",
-            
-            # Financial terms
-            contract_amount=f"${requirements.contract_value:,}.00",
-            contract_type=random.choice(list(ContractType)).value,
-            payment_terms="Net 30 days upon approved invoice",
-            retainage_percentage=f"{random.choice([5, 10, 15])}%",
-            
-            # Timeline information
-            start_date=start_date.strftime("%B %d, %Y"),
-            completion_date=completion_date.strftime("%B %d, %Y"),
-            project_duration=f"{requirements.duration_days} calendar days",
-            
-            # Legal framework
-            governing_law="State of [JURISDICTION]",
-            dispute_resolution="Binding arbitration in accordance with [STATE] law",
-            
-            # Insurance requirements scaled by project value
-            insurance_requirements=self._generate_insurance_requirements(requirements.contract_value),
-            bond_requirements=self._generate_bond_requirements(requirements.contract_value),
-            
-            # Technical standards
-            building_codes=self._generate_building_codes(),
-            quality_standards=self._generate_quality_standards(),
-            safety_requirements=self._generate_safety_requirements()
-        )
+        try:
+            contract_date = self.fake.date_between(start_date='-3m', end_date='+1m')
+            start_date = contract_date + timedelta(days=random.randint(15, 60))
+            completion_date = start_date + timedelta(days=requirements.duration_days)
+            contractor_types = ["Construction", "Builders", "Engineering", "Development", "Infrastructure"]
+            contractor_entities = ["LLC", "Inc.", "Corp.", "Co."]
+
+            return GeneratedContractData(
+                contract_date=contract_date.strftime("%B %d, %Y"),
+                project_name=f"{requirements.project_type} - Phase {random.randint(1,5)}",
+                project_description=f"Comprehensive {requirements.project_type.lower()} project including all associated work, materials, installation, and completion for the site located at {requirements.location}.",
+                owner_name=f"The {self.fake.word().capitalize()} Authority of {requirements.location.split(' ')[0]}",
+                owner_representative=f"[OWNER_REPRESENTATIVE_NAME], P.Eng., Director of Capital Projects",
+                contractor_name=f"{self.fake.bs().split(' ')[0].capitalize()} {random.choice(contractor_types)} {random.choice(contractor_entities)}",
+                contractor_address=f"[CONTRACTOR_STREET_NUMBER] [CONTRACTOR_STREET_NAME], [CONTRACTOR_CITY], [CONTRACTOR_STATE_PROVINCE] [CONTRACTOR_POSTAL_CODE]",
+                contractor_representative=f"[CONTRACTOR_REPRESENTATIVE_FIRST_NAME] [CONTRACTOR_REPRESENTATIVE_LAST_NAME], Senior Project Manager",
+                contract_amount=f"${requirements.contract_value:,.2f}",
+                contract_type=random.choice(list(ContractType)).value,
+                payment_terms="Net 30 days upon submission and Owner's approval of itemized invoice, subject to retainage provisions.",
+                retainage_percentage=f"{random.choice([5.0, 7.5, 10.0]):.1f}%",
+                start_date=start_date.strftime("%B %d, %Y"),
+                completion_date=completion_date.strftime("%B %d, %Y"),
+                project_duration=f"{requirements.duration_days} calendar days from the official Notice to Proceed date.",
+                governing_law="The laws of the State of [JURISDICTION_STATE_PROVINCE], without regard to its conflict of law principles.",
+                dispute_resolution="Binding arbitration administered by the [ARBITRATION_ADMINISTRATOR_NAME] in accordance with its Construction Industry Arbitration Rules, with the arbitration taking place in [ARBITRATION_CITY], [ARBITRATION_STATE_PROVINCE].",
+                insurance_requirements=self._generate_insurance_requirements(requirements.contract_value),
+                bond_requirements=self._generate_bond_requirements(requirements.contract_value),
+                building_codes=self._generate_building_codes(requirements.location),
+                quality_standards=self._generate_quality_standards(),
+                safety_requirements=self._generate_safety_requirements()
+            )
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
     
+    # This Function returns the base requirements that are necessary for the contract based on the contract value
     def _generate_insurance_requirements(self, contract_value: int) -> List[str]:
-        """Generate appropriate insurance requirements based on contract value."""
-        base_requirements = [
-            "General Liability Insurance - $2,000,000 per occurrence",
-            "Professional Liability Insurance - $1,000,000 per claim", 
-            "Workers' Compensation as required by law",
-            "Commercial Auto Liability - $1,000,000 combined single limit"
-        ]
-        
-        if contract_value > 5000000:
-            base_requirements.extend([
-                "Umbrella Liability - $5,000,000",
-                "Environmental Liability - $1,000,000"
-            ])
-        
-        return base_requirements
-    
+        try:
+            base_requirements = [
+                "Commercial General Liability: $2,000,000 per occurrence / $4,000,000 aggregate",
+                "Automobile Liability: $1,000,000 combined single limit (CSL)",
+                "Workers' Compensation: Statutory limits as per [JURISDICTION_STATE_PROVINCE] law",
+                "Employer's Liability: $1,000,000 each accident / $1,000,000 disease policy / $1,000,000 disease each employee"
+            ]
+            if contract_value > 1_000_000:
+                base_requirements.append("Professional Liability (E&O): $2,000,000 per claim / $2,000,000 aggregate (if design services provided)")
+            if contract_value > 5_000_000:
+                base_requirements.extend([
+                    "Umbrella/Excess Liability: $5,000,000 per occurrence / $5,000,000 aggregate",
+                    "Pollution Liability: $2,000,000 per occurrence (if scope involves hazardous materials)"
+                ])
+            if contract_value > 20_000_000: # Mega projects
+                 base_requirements[0] = "Commercial General Liability: $5,000,000 per occurrence / $10,000,000 aggregate"
+                 idx_umbrella = next((i for i, s in enumerate(base_requirements) if "Umbrella/Excess Liability" in s), -1)
+                 if idx_umbrella != -1:
+                     base_requirements[idx_umbrella] = "Umbrella/Excess Liability: $10,000,000 per occurrence / $10,000,000 aggregate"
+            return base_requirements
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
+
+    # This Function returns the base requirements that are necessary for the creating the bond
     def _generate_bond_requirements(self, contract_value: int) -> List[str]:
-        """Generate bond requirements based on contract value thresholds."""
-        if contract_value < 100000:
-            return []
-        
-        requirements = [
-            "Performance Bond - 100% of contract value",
-            "Payment Bond - 100% of contract value"
-        ]
-        
-        if contract_value > 1000000:
-            requirements.append("Maintenance Bond - 2 years from completion")
-        
-        return requirements
+        try:
+            if contract_value < 100_000:
+                return ["Bonding requirements may be waived by Owner for contract values under $100,000."]
+            requirements = [
+                "Performance Bond: 100% of the Contract Price, from an A.M. Best 'A-' rated surety.",
+                "Payment Bond: 100% of the Contract Price, from an A.M. Best 'A-' rated surety."
+            ]
+            if contract_value > 1_000_000:
+                requirements.append("Maintenance Bond: 10% of Contract Price for 24 months post-Substantial Completion.")
+            elif contract_value > 250_000 :
+                requirements.append("Maintenance Bond: 10% of Contract Price for 12 months post-Substantial Completion.")
+            return requirements
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
+
+    # This function returns a list of standard building codes applicable to the specified project location.
+    def _generate_building_codes(self, location: str) -> List[str]:
+        try:
+            return [
+                "International Building Code (IBC), latest edition adopted by [JURISDICTION_STATE_PROVINCE].",
+                "International Fire Code (IFC), International Mechanical Code (IMC), International Plumbing Code (IPC) - latest adopted editions.",
+                "National Electrical Code (NEC), latest adopted edition.",
+                "All applicable local [JURISDICTION_CITY_NAME] and County of [JURISDICTION_COUNTY_NAME] building codes, ordinances, and amendments.",
+                "Americans with Disabilities Act (ADA) Standards for Accessible Design, current version."
+            ]
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
     
-    def _generate_building_codes(self) -> List[str]:
-        """Generate standard building codes applicable to construction projects."""
-        return [
-            "International Building Code (IBC) Current Edition",
-            "International Fire Code (IFC) Current Edition",
-            "Americans with Disabilities Act (ADA) Standards",
-            "Local Municipal Building Codes and Ordinances"
-        ]
-    
+    # This function returns a list of general quality standards and industry codes for construction materials and methods.
     def _generate_quality_standards(self) -> List[str]:
-        """Generate industry-standard quality requirements."""
-        return [
-            "ASTM International Standards",
-            "American Institute of Steel Construction (AISC)",
-            "American Concrete Institute (ACI) Standards",
-            "National Institute of Standards and Technology (NIST)"
-        ]
-    
+        try:
+            return [
+                "All materials and workmanship must conform to relevant ASTM International, ANSI, and other applicable industry standards.",
+                "Structural steel fabrication and erection to comply with AISC (American Institute of Steel Construction) specifications.",
+                "Concrete work must adhere to ACI (American Concrete Institute) codes and standards (e.g., ACI 318, ACI 301).",
+                "Welding procedures and welders to be qualified in accordance with AWS (American Welding Society) D1.1/D1.1M or other applicable AWS codes.",
+                "A comprehensive Quality Control (QC) Plan must be submitted by Contractor and approved by Owner prior to work commencement."
+            ]
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
+
+    # This function returns a list of mandatory safety requirements and protocols to be followed during construction.
     def _generate_safety_requirements(self) -> List[str]:
-        """Generate comprehensive safety requirements."""
-        return [
-            "Site-specific Safety Plan required prior to work commencement",
-            "Daily safety meetings mandatory for all personnel",
-            "Personal Protective Equipment (PPE) compliance verification",
-            "Environmental protection and waste management plan"
-        ]
+        try:
+            return [
+                "Full compliance with all applicable federal, state, and local safety regulations, including OSHA (Occupational Safety and Health Administration) standards (e.g., 29 CFR 1926).",
+                "Contractor shall develop and implement a site-specific Health and Safety Plan (HASP), submitted for Owner review prior to mobilization.",
+                "Daily pre-task safety briefings (toolbox talks) for all personnel on site.",
+                "Mandatory use of appropriate Personal Protective Equipment (PPE) as required by task and site conditions.",
+                "Clear GHS-compliant labeling for all hazardous materials, with Safety Data Sheets (SDS) readily available."
+            ]
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
 
 class ContentValidator:
-    """
-    Validates generated content for real-world data leakage and ensures anonymization.
-    Implements multiple validation layers for comprehensive privacy protection.
-    """
-    
-    def __init__(self):
-        """Initialize the content validator with comprehensive detection patterns."""
-        
-        # Patterns for detecting potentially real data
-        self.sensitive_patterns = {
-            'phone_numbers': r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b',
-            'email_addresses': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
-            'ssn_numbers': r'\b\d{3}-\d{2}-\d{4}\b',
-            'real_company_names': self._get_real_company_patterns(),
-            'real_person_names': self._get_common_name_patterns(),
-            'specific_addresses': r'\b\d+\s+[A-Za-z\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Court|Ct|Place|Pl)\b',
-            'license_numbers': r'\b[A-Z]{2}\d{6,8}\b',
-            'bank_routing': r'\b\d{9}\b'
-        }
-        
-        # Replacement templates for anonymization
-        self.replacement_templates = {
-            'phone_numbers': '[PHONE_NUMBER]',
-            'email_addresses': '[EMAIL_ADDRESS]', 
-            'ssn_numbers': '[SSN]',
-            'real_company_names': '[COMPANY_NAME]',
-            'real_person_names': '[PERSON_NAME]',
-            'specific_addresses': '[ADDRESS]',
-            'license_numbers': '[LICENSE_NUMBER]',
-            'bank_routing': '[ROUTING_NUMBER]'
-        }
-    
-    def validate_and_anonymize_content(self, content: str) -> Tuple[str, List[str]]:
-        """
-        Comprehensive validation and anonymization of generated content.
-        
-        Args:
-            content: Raw generated content to validate and clean
-            
-        Returns:
-            Tuple of (anonymized_content, list_of_issues_found)
-        """
-        issues_found = []
-        cleaned_content = content
-        
-        # Ensure content is a string
-        if not isinstance(cleaned_content, str):
-            cleaned_content = str(cleaned_content)
-            issues_found.append("Content was not a string, converted to string")
+    """Validates and anonymizes content for privacy protection."""
 
-        # Apply each validation pattern
-        for pattern_name, pattern_regex in self.sensitive_patterns.items():
-            matches = re.finditer(pattern_regex, cleaned_content, re.IGNORECASE)
-            match_count = 0
-            
-            for match in matches:
-                match_count += 1
-                matched_text = match.group()
-                replacement = self.replacement_templates[pattern_name]
-                cleaned_content = cleaned_content.replace(matched_text, replacement)
-                
-            if match_count > 0:
-                issues_found.append(f"Found and anonymized {match_count} instances of {pattern_name}")
-        
-        # Additional context-aware validation
-        additional_issues = self._validate_construction_context(cleaned_content)
-        issues_found.extend(additional_issues)
-        
-        return cleaned_content, issues_found
-    
+    # This constructor initializes regex patterns and replacement templates for detecting and organizational information.
+    def __init__(self):
+
+        try:
+            self.sensitive_patterns = {
+                'phone_numbers': r'\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b',
+                'email_addresses': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b',
+                'ssn_numbers': r'\b\d{3}-\d{2}-\d{4}\b',
+                'real_company_names': self._get_real_company_patterns(),
+                'specific_addresses': r'\b\d{1,5}\s+(?:[A-Za-z0-9\s.-]+)\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Court|Ct|Place|Pl|Way|Terrace|Circle|Pkwy|Freeway|Hwy)\b',
+                'license_numbers': r'\b[A-Z]{1,3}[-.\s]?\d{4,10}\b',
+                'bank_routing': r'\b\d{9}\b',
+                'credit_card_numbers': r'\b(?:\d[ -]*?){13,19}\b'
+            }
+            self.replacement_templates = {
+                'phone_numbers': '[PHONE_NUMBER_REDACTED]', 'email_addresses': '[EMAIL_ADDRESS_REDACTED]',
+                'ssn_numbers': '[SSN_REDACTED]', 'real_company_names': '[COMPANY_NAME_GENERICIZED]',
+                'specific_addresses': '[ADDRESS_DETAIL_REDACTED]', 'license_numbers': '[LICENSE_NUMBER_REDACTED]',
+                'bank_routing': '[BANK_ROUTING_REDACTED]', 'credit_card_numbers': '[CREDIT_CARD_REDACTED]'
+            }
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
+
+    # This function scans the input content for sensitive information, anonymizes it using predefined patterns, and returns the cleaned content along with any issues found.
+    def validate_and_anonymize_content(self, content: str) -> Tuple[str, List[str]]:
+
+        try:
+            issues_found = []
+            cleaned_content = content
+            if not isinstance(cleaned_content, str):
+                logger.warning(f"Content was not string (type: {type(cleaned_content)}), converting.")
+                cleaned_content = str(cleaned_content)
+                issues_found.append(f"Warning: Content converted to string. Original type: {type(content)}")
+
+            for pattern_name, pattern_regex in self.sensitive_patterns.items():
+                def replace_match(match_obj): return self.replacement_templates[pattern_name]
+                cleaned_content, num_replacements = re.subn(pattern_regex, replace_match, cleaned_content, flags=re.IGNORECASE)
+                if num_replacements > 0:
+                    issues_found.append(f"Anonymized {num_replacements} instance(s) of potential {pattern_name}.")
+            additional_issues = self._validate_construction_context(cleaned_content)
+            issues_found.extend(additional_issues)
+            return cleaned_content, issues_found
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            return content, [f"Error during validation: {str(e)}"]
+
+
+    # This function returns a regex pattern string matching well-known real-world company names and legal entity suffixes for anonymization.
     def _get_real_company_patterns(self) -> str:
-        """Generate pattern for detecting real company names."""
-        # Common real company indicators
-        real_company_indicators = [
-            r'\b(?:Microsoft|Google|Apple|Amazon|Meta|Tesla|Ford|Boeing|Caterpillar|General\s+Electric)\b'
-        ]
-        return '|'.join(real_company_indicators)
-    
-    def _get_common_name_patterns(self) -> str:
-        """Generate pattern for detecting common real person names."""
-        # This is a simplified version - in production, use a comprehensive names database
-        common_names = [
-            r'\b(?:John|Jane|Michael|Sarah|David|Lisa|Robert|Jennifer|William|Jessica)\s+(?:Smith|Johnson|Williams|Brown|Jones|Garcia|Miller|Davis|Rodriguez|Martinez)\b'
-        ]
-        return '|'.join(common_names)
-    
+        try:
+            real_company_indicators = [
+                r'\b(?:Microsoft|Google|Apple|Amazon|Meta|Tesla|Ford|Boeing|Caterpillar|General\s+Electric|Bechtel|Skanska|Turner\s+Construction|Kiewit|Fluor\s+Corp|Jacobs|AECOM|Vinci|Acciona)\b',
+                r'\b(?:Inc\.?|LLC\.?|Corp\.?|Ltd\.?|GmbH)\s*(?:,|\.|$)',
+            ]
+            return '|'.join(real_company_indicators)
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
+
+    # This function scans the content for construction-specific sensitive references like brand names, patent numbers, and project codes, returning any issues found.
     def _validate_construction_context(self, content: str) -> List[str]:
-        """Perform construction-specific validation checks."""
-        issues = []
-        
-        # Check for overly specific technical details that might be proprietary
-        if re.search(r'Patent\s+(?:No\.?\s*)?\d{7,}', content, re.IGNORECASE):
-            issues.append("Found potential patent number reference")
-        
-        # Check for specific brand names that should be genericized
-        brand_patterns = r'\b(?:Caterpillar|CAT|John\s+Deere|Volvo|Liebherr|Komatsu|Hitachi)\b'
-        if re.search(brand_patterns, content, re.IGNORECASE):
-            issues.append("Found specific equipment brand names - should be genericized")
-        
-        return issues
+        try:
+            issues = []
+            if re.search(r'Patent\s+(?:No\.?\s*)?\b[A-Z0-9]{7,12}\b', content, re.IGNORECASE):
+                issues.append("Potential patent number reference found. Ensure generic or placeholder.")
+            brand_patterns = r'\b(?:Caterpillar|CAT|John\s+Deere|Volvo\s+CE|Liebherr|Komatsu|Hitachi|Hilti|DeWalt|Makita|Bosch|Cummins|Perkins)\b'
+            found_brands = re.findall(brand_patterns, content, re.IGNORECASE)
+            if found_brands and not all(brand.startswith('[') and brand.endswith(']') for brand in found_brands):
+                 issues.append(f"Specific equipment/material brand(s) found: {', '.join(set(found_brands))}. Consider genericizing (e.g., '[BRAND_EQUIVALENT]').")
+            if re.search(r'\b[A-Z]{2,4}-\d{3,6}-[A-Z0-9]{2,5}(?:-[A-Z])?\b', content):
+                issues.append("Potential specific project code or internal identifier found. Ensure generic.")
+            return issues
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            return [f"Error during construction context validation: {str(e)}"]
 
 class LLMContentGenerator:
-    """
-    Manages LLM interactions for generating construction contract content.
-    Handles prompts, responses, and error recovery mechanisms.
-    """
-    
+    """Manages LLM interactions for content generation."""
+
+    # Initializes the LLM interface with an optional API key and attempts model setup.
     def __init__(self, api_key: Optional[str] = None):
-        """
-        Initialize the LLM content generator with API configuration.
-        
-        Args:
-            api_key: Google Gemini API key for content generation
-        """
-        self.api_key = api_key or os.environ.get("GOOGLE_API_KEY")
-        self.model = None
-        self.is_initialized = False
-        self._setup_model()
-        
-    def _setup_model(self) -> bool:
-        """
-        Configure and initialize the LLM model.
-        
-        Returns:
-            bool: True if model setup successful, False otherwise
-        """
         try:
-            if not self.api_key:
-                logger.warning("No API key provided. LLM generation will not be available.")
-                return False
-                
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
-            self.is_initialized = True
-            logger.info("LLM model initialized successfully.")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to initialize LLM model: {e}")
+            self.api_key = api_key or os.environ.get("GOOGLE_API_KEY")
             self.model = None
             self.is_initialized = False
+            self._setup_model()
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
+
+    # Configures and initializes the Gemini LLM model using the provided or environment API key.
+    def _setup_model(self) -> bool:
+        try:
+            if not self.api_key:
+                logger.warning("No API key for LLM. LLM generation unavailable.")
+                if 'st' in sys.modules: st.sidebar.warning("No Google API Key. LLM features disabled.", icon="⚠️")
+                return False
+            genai.configure(api_key=self.api_key)
+            self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
+            self.is_initialized = True
+            logger.info("LLM model (gemini-1.5-flash-latest) initialized.")
+            if 'st' in sys.modules: st.sidebar.success("Google LLM Initialized.", icon="✅")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM model: {e}", exc_info=True)
+            if 'st' in sys.modules: st.sidebar.error(f"LLM Init Failed: {e}", icon="❌")
+            self.model = None; self.is_initialized = False
             return False
-    
-    def estimate_tokens(self, text: str) -> int:
-        """Estimate the number of tokens in a text (rough approximation)."""
-        return len(text.split()) + len(text) // 4  # Rough estimate: words + 1 token per 4 characters
-    
-    def generate_article_content(self, article_type: str, requirements: ContractRequirements, 
-                               contract_data: GeneratedContractData, max_retries: int = 3, 
-                               max_tokens_per_call: int = 2500) -> str:
-        """
-        Generate contract article content using the LLM.
-        Falls back to template-based generation if LLM is unavailable or fails.
-        """
-        if not self.model or not self.is_initialized:
-            logger.warning("LLM model not available, using fallback generation")
-            return self._fallback_generation(article_type, requirements, contract_data)
-        
-        initial_prompt = self._create_article_prompt(article_type, requirements, contract_data)
-        generated_text = ""
-        stop_reason = "length"
-        iteration_count = 0
-        max_iterations = 10
-        
-        # Use st.write instead of st.status to avoid nesting expanders
-        st.write(f"Generating {article_type}...")
-        
-        while stop_reason == "length" and iteration_count < max_iterations:
-            st.write(f"Generation iteration {iteration_count + 1} for {article_type}")
-            iteration_count += 1
-            
-            if not generated_text:
-                prompt = initial_prompt
-            else:
-                context_length = min(500, len(generated_text))
-                context = generated_text[-context_length:]
-                prompt = f"Continue from where this left off:\n\n{context}\n\nContinue writing seamlessly:"
-            
+
+    # Generates contract article content using the LLM or falls back if the model is unavailable or fails.
+    def generate_article_content(self, article_type: str, requirements: ContractRequirements,
+                               contract_data: GeneratedContractData, max_retries: int = 2,
+                               max_tokens_per_call: int = 4000) -> str:
+        try:
+            if not self.model or not self.is_initialized:
+                logger.warning(f"LLM unavailable for '{article_type}', using fallback.")
+                return self._fallback_generation(article_type, requirements, contract_data)
+
+            initial_prompt = self._create_article_prompt(article_type, requirements, contract_data)
+            generated_text_parts = []
+            current_prompt = initial_prompt
+            safety_settings = [{"category":c,"threshold":"BLOCK_MEDIUM_AND_ABOVE"} for c in ["HARM_CATEGORY_HARASSMENT","HARM_CATEGORY_HATE_SPEECH","HARM_CATEGORY_SEXUALLY_EXPLICIT","HARM_CATEGORY_DANGEROUS_CONTENT"]]
+            if 'st' in sys.modules: st.write(f"LLM: Generating content for '{article_type}'...")
+
             for attempt in range(max_retries):
                 try:
                     response = self.model.generate_content(
-                        prompt,
-                        generation_config=genai.types.GenerationConfig(
-                            max_output_tokens=max_tokens_per_call,
-                            temperature=0.7,
-                            top_p=0.9
-                        )
+                        current_prompt,
+                        generation_config=genai.types.GenerationConfig(max_output_tokens=max_tokens_per_call, temperature=0.65, top_p=0.95),
+                        safety_settings=safety_settings
                     )
-                    
+                    if not response.parts or not hasattr(response, 'text'):
+                        logger.error(f"LLM response for '{article_type}' empty/invalid. Feedback: {response.prompt_feedback if hasattr(response, 'prompt_feedback') else 'N/A'}")
+                        if hasattr(response, 'prompt_feedback') and response.prompt_feedback.block_reason:
+                            if 'st' in sys.modules: st.error(f"'{article_type}' blocked: {response.prompt_feedback.block_reason_message}")
+                            return self._fallback_generation(article_type, requirements, contract_data)
+                        if attempt < max_retries -1 :
+                            if 'st' in sys.modules: st.write(f"LLM: Empty/invalid response for '{article_type}', retrying...")
+                            continue
+                        else: raise Exception("LLM returned empty/invalid response after multiple retries.")
+
                     new_content = response.text.strip()
-                    if generated_text and new_content:
-                        generated_text += "\n" + new_content
-                    elif new_content:
-                        generated_text = new_content
-                    
-                    generated_tokens_approx = self.estimate_tokens(new_content)
-                    st.write(f"Generated {generated_tokens_approx} tokens in iteration {iteration_count}")
-                    
-                    token_threshold = max_tokens_per_call * 0.85
-                    natural_endings = ['.', '!', '?', ':', ';', '"', "'", ')', ']', '}']
-                    ends_naturally = any(new_content.rstrip().endswith(ending) for ending in natural_endings)
-                    ends_mid_word = (len(new_content) > 0 and 
-                                   not new_content.endswith(' ') and 
-                                   not ends_naturally and
-                                   new_content[-1].isalnum())
-                    
-                    if generated_tokens_approx >= token_threshold or ends_mid_word:
-                        st.write("Response likely truncated - continuing...")
-                        stop_reason = "length"
+                    generated_text_parts.append(new_content)
+                    if 'st' in sys.modules: st.write(f"LLM: Received chunk for '{article_type}'.")
+                    finish_reason = response.candidates[0].finish_reason.name if response.candidates and response.candidates[0].finish_reason else ""
+                    if finish_reason == "MAX_TOKENS" and len(generated_text_parts) < 3:
+                        if 'st' in sys.modules: st.write(f"LLM: Max tokens for '{article_type}', attempting to continue...")
+                        current_prompt = f"{initial_prompt}\n\nPREVIOUSLY GENERATED (DO NOT REPEAT):\n{''.join(generated_text_parts)}\n\nCONTINUE WRITING SEAMLESSLY:"
                     else:
-                        st.write("Response appears complete - stopping...")
-                        stop_reason = "stop"
+                        logger.info(f"LLM for '{article_type}' finished. Reason: {finish_reason or 'Completed'}")
                         break
-                    
-                except Exception as e:
-                    logger.error(f"LLM generation failed on attempt {attempt + 1}: {e}")
+                except Exception as e_inner:
+                    logger.error(f"LLM generation for '{article_type}' attempt {attempt + 1} failed: {e_inner}", exc_info=True)
+                    if 'st' in sys.modules: st.write(f"LLM Error (Attempt {attempt+1}) for '{article_type}': {e_inner}")
                     if attempt == max_retries - 1:
-                        st.write(f"Failed after {max_retries} attempts. Falling back to template.")
+                        if 'st' in sys.modules: st.warning(f"LLM failed for '{article_type}' after {max_retries} attempts. Using fallback.", icon="⚠️")
                         return self._fallback_generation(article_type, requirements, contract_data)
             
-            if stop_reason != "length":
-                break
-        
-        if iteration_count >= max_iterations:
-            st.write("Maximum iterations reached. Falling back to template.")
+            final_generated_text = "\n\n".join(generated_text_parts)
+            if not final_generated_text.strip():
+                logger.warning(f"LLM empty content for '{article_type}'. Using fallback.")
+                if 'st' in sys.modules: st.warning(f"LLM produced empty content for '{article_type}'. Using fallback.", icon="⚠️")
+                return self._fallback_generation(article_type, requirements, contract_data)
+            if 'st' in sys.modules: st.write(f"LLM: Successfully generated content for '{article_type}'.")
+            return final_generated_text
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)} for '{article_type}': {str(e)}", exc_info=True)
             return self._fallback_generation(article_type, requirements, contract_data)
         
-        return generated_text
-    
+    # Uses a predefined template-based fallback to generate article content when LLM fails.
     def _fallback_generation(self, article_type: str, requirements: ContractRequirements,
                            contract_data: GeneratedContractData) -> str:
-        """Generate article content using fallback templates."""
-        fallback_generator = FallbackGenerator()
-        return fallback_generator.generate_fallback_article(article_type, requirements, contract_data)
-    
+        try:
+            logger.info(f"Using fallback template for article: {article_type}")
+            fallback_generator = FallbackGenerator()
+            return fallback_generator.generate_fallback_article(article_type, requirements, contract_data)
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)} while calling FallbackGenerator: {str(e)}", exc_info=True)
+            return f"ARTICLE - {article_type.upper()}\n\n[CRITICAL ERROR: Fallback generation mechanism itself failed for this article. Please report this issue. Details: {str(e)}]"
+        
+    # Constructs the LLM prompt string for generating a specific contract article based on context and requirements.
     def _create_article_prompt(self, article_type: str, requirements: ContractRequirements,
                              contract_data: GeneratedContractData) -> str:
-        """
-        Create specialized prompts for different contract articles.
-        
-        Args:
-            article_type: Type of article to generate
-            requirements: Contract requirements
-            contract_data: Contract data for context
-            
-        Returns:
-            str: Formatted prompt for LLM generation
-        """
-        base_context = f"""
-You are a senior construction attorney specializing in public works contracts. 
-Generate a comprehensive, legally sound contract article with the following specifications:
-
-PROJECT CONTEXT:
-- Project Type: {requirements.project_type}
-- Contract Value: ${requirements.contract_value:,}
-- Duration: {requirements.duration_days} days
-- Complexity: {requirements.complexity}
-
-IMPORTANT: Use only generic placeholders like [OWNER_NAME], [CONTRACTOR_NAME], 
-[PROJECT_NAME], etc. Do not include any real company names, person names, or 
-specific identifying information.
+        try:
+            base_context = f"""
+Role: Senior Paralegal specializing in Construction Contracts.
+Task: Draft a specific article for a construction contract.
+Project Context: Type: {requirements.project_type}, Value: {contract_data.contract_amount}, Duration: {contract_data.project_duration}, Complexity: {requirements.complexity}, Location: {requirements.location}.
+Instructions:
+1. Use ONLY generic placeholders (e.g., [OWNER_NAME], [CONTRACTOR_NAME], [PROJECT_START_DATE]). No real entities.
+2. Structure with clear numbered/lettered sub-sections (1.1, 1.2, a, b).
+3. Content must be comprehensive, professional, legally sound, and formal.
+4. Focus SOLELY on the requested article's content. Do not add external intro/conclusions.
+5. Ensure keywords relevant to construction and the specific article are used (e.g. "installation", "materials", "completion", "subcontractor", "payment", "default" etc. as appropriate).
 """
-
-        article_prompts = {
-            "Scope of Work and Specifications": f"""
-{base_context}
-
-Generate a detailed SCOPE OF WORK AND SPECIFICATIONS article that includes:
-
-1. PROJECT OVERVIEW
-   - Clear description of work to be performed
-   - Project objectives and deliverables
-   - Work site conditions and constraints
-
-2. TECHNICAL SPECIFICATIONS
-   - Detailed work descriptions by phase
-   - Material specifications and standards
-   - Quality requirements and testing protocols
-   - Performance criteria and acceptance standards
-
-3. CONTRACTOR RESPONSIBILITIES
-   - Supervision and project management
-   - Equipment and material procurement
-   - Subcontractor coordination requirements
-   - Progress reporting and documentation
-
-4. SPECIAL REQUIREMENTS
-   - Environmental compliance measures
-   - Safety protocols and procedures
-   - Permit and approval responsibilities
-   - Coordination with utilities and agencies
-
-Make the scope specific and measurable for this {requirements.complexity} complexity project.
-Use professional legal language with numbered subsections.
+            article_specific_prompts = {
+                ContractArticle.DEFINITIONS.value: f"""{base_context}
+ARTICLE TASK: "Definitions and Interpretation".
+Define: "Agreement", "Change Order", "Contract Documents", "Day", "Drawings", "Final Completion", "Hazardous Materials", "Owner", "Contractor", "Project", "Site", "Specifications", "Subcontractor", "Substantial Completion", "Work", "Notice to Proceed".
+Interpretation subsection: order of precedence, singular/plural, headings, governing law (use "[JURISDICTION_STATE_PROVINCE]").""",
+                ContractArticle.SCOPE_OF_WORK.value: f"""{base_context}
+ARTICLE TASK: "Scope of Work and Specifications" for [CONTRACTOR_NAME] for [OWNER_NAME].
+Sub-sections:
+1. General Description: Construction of a new {requirements.project_type} at {requirements.location}.
+2. Contractor's Responsibilities: Furnish all labor, materials, equipment, tools, supervision, permits (as allocated), quality control, safety compliance, site cleanup, and coordination for full execution and completion of the Work.
+3. Work Included: List major components for a {requirements.project_type} of {requirements.complexity} complexity (e.g., site preparation, foundations, structural framing, building envelope, interior fit-out, MEP systems installation, testing and commissioning, final cleanup and demobilization).
+4. Specifications and Standards: Adherence to Contract Documents ([DRAWING_SET_IDENTIFIER], [SPECIFICATIONS_MANUAL_VERSION]), building codes ({', '.join(contract_data.building_codes)}), quality standards ({', '.join(contract_data.quality_standards)}), and safety requirements ({', '.join(contract_data.safety_requirements)}).
+5. Exclusions (Optional but good): List any significant items NOT part of Contractor's scope if it clarifies boundaries.
+Special Project Requirements: {', '.join(requirements.special_requirements) if requirements.special_requirements else 'Standard industry practices for a project of this nature.'}""",
+                ContractArticle.CONTRACT_PRICE.value: f"""{base_context}
+ARTICLE TASK: "Contract Price and Payment Terms".
+Sub-sections:
+1. Contract Price: Total sum {contract_data.contract_amount} ([CONTRACT_AMOUNT_IN_WORDS_PLACEHOLDER]). Basis: {contract_data.contract_type}. Inclusions: All labor, materials, equipment, overhead, profit.
+2. Schedule of Values: Contractor to submit detailed SOV for Owner approval before first payment application.
+3. Applications for Payment: Monthly by [DAY_OF_MONTH_FOR_SUBMISSION], detailing work completed, stored materials. Required backup: Lien waivers, payroll reports ([PAYROLL_FORM_ID_PLACEHOLDER]).
+4. Review and Approval: Owner/Architect review within [NUMBER_OF_DAYS_FOR_REVIEW] days.
+5. Payments: Net [NUMBER_OF_DAYS_FOR_PAYMENT_AFTER_APPROVAL] days from certification.
+6. Retainage: {contract_data.retainage_percentage} withheld from each progress payment. Release upon Final Completion and satisfaction of all closeout requirements.
+7. Final Payment: Conditions: Completion of all punch list items, submission of as-built drawings, warranties, final lien waivers, consent of surety.
 """,
+            }
+            prompt = article_specific_prompts.get(article_type)
+            if prompt: return prompt
+            logger.info(f"Using generic LLM prompt for article: {article_type}")
+            return f"{base_context}\n\nARTICLE TASK: Generate a comprehensive \"{article_type}\" article. Include all typical sub-clauses, provisions, and legal language. Well-structured."
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
 
-            "Contract Price and Payment Terms": f"""
-{base_context}
-
-Generate a comprehensive CONTRACT PRICE AND PAYMENT TERMS article including:
-
-1. CONTRACT PRICE
-   - Total contract amount: {contract_data.contract_amount}
-   - Price basis and inclusions/exclusions
-   - Unit price breakdowns if applicable
-
-2. PAYMENT SCHEDULE
-   - Progress payment procedures
-   - Invoice submission requirements
-   - Approval and payment timelines
-   - Retainage provisions ({contract_data.retainage_percentage})
-
-3. CHANGE ORDER PROVISIONS
-   - Change order procedures and approvals
-   - Pricing methodology for additional work
-   - Time impact considerations
-
-4. FINAL PAYMENT
-   - Substantial completion requirements
-   - Final payment conditions
-   - Warranty and guarantee provisions
-
-Use precise legal language with clear procedures and deadlines.
-""",
-
-            "Default and Termination": f"""
-{base_context}
-
-Generate a comprehensive DEFAULT AND TERMINATION article covering:
-
-1. EVENTS OF DEFAULT
-   - Contractor default conditions
-   - Owner default conditions
-   - Material breach definitions
-
-2. NOTICE AND CURE PROVISIONS
-   - Notice requirements and methods
-   - Cure periods and procedures
-   - Continuing default consequences
-
-3. REMEDIES UPON DEFAULT
-   - Rights and remedies for each party
-   - Liquidated damages provisions
-   - Cover and completion rights
-
-4. TERMINATION PROCEDURES
-   - Termination for cause
-   - Termination for convenience
-   - Post-termination obligations
-
-Include appropriate liquidated damages (suggest ${max(500, requirements.contract_value // 10000)} per day).
-""",
-
-            "Insurance and Bonding Requirements": f"""
-{base_context}
-
-Generate comprehensive INSURANCE AND BONDING REQUIREMENTS including:
-
-1. REQUIRED INSURANCE COVERAGE
-   - Types and minimum coverage amounts
-   - Certificate of insurance requirements
-   - Additional insured provisions
-   - Insurance carrier requirements
-
-2. BONDING REQUIREMENTS
-   - Performance bond requirements
-   - Payment bond requirements  
-   - Maintenance bond provisions
-   - Bond form and conditions
-
-3. CLAIMS AND PROCEDURES
-   - Claims notification procedures
-   - Coordination between insurers
-   - Waiver of subrogation provisions
-
-4. COMPLIANCE MONITORING
-   - Ongoing compliance verification
-   - Remedies for non-compliance
-   - Insurance updates and renewals
-
-Base requirements on contract value of ${requirements.contract_value:,}.
-"""
-        }
-        
-        return article_prompts.get(article_type, f"{base_context}\n\nGenerate a comprehensive {article_type} article with all necessary legal provisions and subsections.")
+    # Formats a list of strings into a bulleted prompt-ready structure, with optional description labels.
+    def _format_list_for_prompt(self, items: List[str], item_description: str) -> str:
+        try:
+            if not items: return f"    - No specific {item_description.lower()} listed; state general requirements."
+            return "\n".join([f"    - {item_description}: {req}" for req in items])
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
 
 class FallbackGenerator:
-    """
-    Provides fallback contract generation when LLM is unavailable or fails.
-    Implements template-based generation with customization capabilities.
-    """
-    
+    """Provides fallback contract generation using templates."""
+    #Initializes the FallbackGenerator instance and loads article templates, raising an error if initialization fails.
     def __init__(self):
-        """Initialize the fallback generator with standard templates."""
-        self.article_templates = self._initialize_templates()
+        try:
+            self.article_templates = self._initialize_templates()
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
     
+    #Generates a fallback article using the corresponding template and contract data, with automatic fallback to a generic version if specific formatting fails.
     def generate_fallback_article(self, article_type: str, requirements: ContractRequirements,
                                 contract_data: GeneratedContractData) -> str:
-        """
-        Generate contract article using fallback templates when LLM fails.
-        
-        Args:
-            article_type: Type of contract article to generate
-            requirements: Contract requirements for customization
-            contract_data: Contract data for personalization
-            
-        Returns:
-            str: Generated article content using templates
-        """
-        template = self.article_templates.get(article_type, self._get_generic_template(article_type))
-        logger.info(f"Using template for article: {article_type}")
-        
         try:
-            # Customize template with contract-specific data
-            customized_content = template.format(
-                contract_amount=contract_data.contract_amount,
-                project_duration=contract_data.project_duration,
-                retainage_percentage=contract_data.retainage_percentage,
-                governing_law=contract_data.governing_law,
-                liquidated_damages=max(500, requirements.contract_value // 10000),
-                complexity=requirements.complexity
-            )
+            template = self.article_templates.get(article_type, self._get_generic_template(article_type))
+            logger.info(f"Using fallback template for article: {article_type}")
+            placeholder_data = {
+                **asdict(contract_data), **asdict(requirements),
+                'liquidated_damages_per_day': f"${max(500, int(requirements.contract_value * 0.0001) if requirements.contract_value > 0 else 500):,.0f}",
+                'insurance_requirements_list': "\n".join([f"  - {item}" for item in contract_data.insurance_requirements]) or "  - Standard industry insurance as per [INSURANCE_SCHEDULE_REF].",
+                'bond_requirements_list': "\n".join([f"  - {item}" for item in contract_data.bond_requirements]) or "  - Standard industry bonding as per [BONDING_SCHEDULE_REF].",
+                'building_codes_list': "\n".join([f"  - {item}" for item in contract_data.building_codes]) or "  - Applicable building codes per [JURISDICTION_CODES_REF].",
+                'quality_standards_list': "\n".join([f"  - {item}" for item in contract_data.quality_standards]) or "  - Adherence to relevant quality standards (ASTM, ACI, AISC).",
+                'safety_requirements_list': "\n".join([f"  - {item}" for item in contract_data.safety_requirements]) or "  - Compliance with OSHA and site safety plan [SAFETY_PLAN_REF]."
+            }
+            try:
+                class SafeDict(dict):
+                    def __missing__(self, key):
+                        return f"[{key}]"
+                customized_content = template.format_map(SafeDict(placeholder_data))
+            except Exception as e: 
+                logger.error(f" There Might be an exception in the code {e}.", exc_info=True)
+            return customized_content
+        except KeyError as e_key:
+            logger.error(f"Missing key in fallback template for {article_type}: {e_key}. Template might not be fully populated with available data.", exc_info=True)
+            try:
+                generic_template_content = self._get_generic_template(article_type).format_map(placeholder_data)
+                return generic_template_content + f"\n\n[Note: Specific template for '{article_type}' had missing key: {e_key}. Displaying generic content.]"
+            except Exception as e_generic_format:
+                 logger.error(f"Failed to format even generic template for {article_type} after key error: {e_generic_format}", exc_info=True)
+                 return f"ARTICLE {article_type.upper()}\n\n[Fallback content generation failed due to template key error '{e_key}' and subsequent generic template formatting error. Please check template definitions and available data.]"
         except Exception as e:
-            logger.error(f"Error customizing template for {article_type}: {e}")
-            customized_content = self._get_generic_template(article_type)
-        
-        return customized_content
-    
+            logger.error(f"Error customizing fallback template for {article_type}: {e}", exc_info=True)
+            return f"ARTICLE {article_type.upper()}\n\n[Fallback content generation for this article encountered an error: {str(e)}. Standard provisions apply as per industry practice.]"
+
+    #Loads and returns a dictionary of predefined fallback templates for various contract article types.
     def _initialize_templates(self) -> Dict[str, str]:
-        """Initialize standard contract article templates."""
-        return {
-            "Scope of Work and Specifications": """
-ARTICLE - SCOPE OF WORK AND SPECIFICATIONS
+        try:
+            return {
+                ContractArticle.DEFINITIONS.value: """ARTICLE - DEFINITIONS AND INTERPRETATION
+1.1 Definitions: Key terms used herein are defined as follows:
+  a) "Agreement": This Construction Contract, attachments, and amendments.
+  b) "Contractor": {contractor_name}, the entity responsible for performing the Work.
+  c) "Owner": {owner_name}, the entity commissioning the Project.
+  d) "Project": The {project_type} located at {location}, detailed in Contract Documents.
+  e) "Work": All labor, materials, equipment, installation, and services required by Contract Documents.
+  f) "Contract Price": The total sum of {contract_amount}, payable to Contractor.
+  g) "Substantial Completion": Stage where Project is usable for its intended purpose by Owner.
+  h) "Final Completion": Stage where all Work, including punch list items, is complete and accepted.
+1.2 Interpretation:
+  a) Headings are for convenience only, not for interpretation.
+  b) Singular terms include plural, and vice-versa, as context requires.
+  c) This Agreement is governed by laws of {governing_law}.""",
+                ContractArticle.SCOPE_OF_WORK.value: """ARTICLE - SCOPE OF WORK AND SPECIFICATIONS
+1.1 General Scope: Contractor shall provide all labor, materials, equipment, tools, construction aids, supervision, and services necessary for the complete and proper execution of the Work described in the Contract Documents for the {project_type} ("Project") at {location}. The Project complexity is {complexity}.
+1.2 Description of Work: The Work includes, but is not limited to:
+  (List key phases appropriate for {project_type} and {complexity}, e.g.:
+  a) Site preparation, demolition (if any), and earthwork.
+  b) Foundation construction and structural framing.
+  c) Building envelope (roofing, walls, windows, doors).
+  d) Interior fit-out, finishes, and MEP (Mechanical, Electrical, Plumbing) systems installation.
+  e) Testing, commissioning, and startup of all systems.
+  f) Final site cleanup, landscaping (if applicable), and demobilization.)
+1.3 Contractor's Responsibilities:
+  a) Perform Work in a good, workmanlike, and expeditious manner.
+  b) Comply with all applicable laws, codes, permits, and regulations.
+  c) Coordinate with Owner, Architect/Engineer ([ARCHITECT_ENGINEER_NAME_PLACEHOLDER]), and Subcontractors.
+  d) Implement and maintain quality control and safety programs.
+1.4 Specifications and Standards: All Work shall conform to:
+{building_codes_list}
+{quality_standards_list}
+{safety_requirements_list}
+And all drawings and specifications listed in [DRAWING_SCHEDULE_REF] and [SPECIFICATIONS_INDEX_REF].""",
+                ContractArticle.CONTRACT_PRICE.value: """ARTICLE - CONTRACT PRICE AND PAYMENT TERMS
+2.1 Contract Price: Owner shall pay Contractor for full performance of the Work the sum of {contract_amount} (the "Contract Price"). This is a {contract_type} contract. Price includes all taxes, fees, labor, materials, equipment, overhead, and profit.
+2.2 Schedule of Values: Before first payment application, Contractor shall submit a Schedule of Values allocating Contract Price to Work portions, subject to Owner's approval.
+2.3 Applications for Payment: Monthly, by [DAY_FOR_PAYMENT_SUBMISSION] of each month, Contractor shall submit itemized Applications for Payment based on SOV, for Work completed and materials suitably stored. Applications must be accompanied by lien waivers and other documentation as Owner may reasonably require (e.g., certified payroll [IF_APPLICABLE]).
+2.4 Review and Payment: Owner/Architect will review Applications within [DAYS_FOR_REVIEW] days. Approved amounts, less retainage, paid within [DAYS_FOR_PAYMENT_POST_APPROVAL] days of approval.
+2.5 Retainage: Owner will retain {retainage_percentage} from each progress payment. Retainage released upon Final Completion, acceptance of Work, and satisfaction of closeout requirements.
+2.6 Final Payment: Made after Contractor achieves Final Completion, submits all deliverables (as-builts, warranties, O&M manuals, final lien waivers), and Owner accepts the Work.""",
+                ContractArticle.DEFAULT_TERMINATION.value: """ARTICLE - DEFAULT AND TERMINATION
+3.1 Contractor Default: Events of Contractor default include (but not limited to): persistent failure to supply skilled workers/proper materials; failure to pay Subcontractors; disregard for laws/ordinances; failure to prosecute Work with diligence; insolvency.
+3.2 Owner's Remedies: Upon Contractor default, Owner may, after [CURE_NOTICE_PERIOD_DAYS] days' written notice and opportunity to cure:
+  a) Terminate Contractor's right to proceed with Work.
+  b) Take possession of Site and materials; finish Work by reasonable means. Contractor liable for excess completion costs.
+  c) Withhold payments due.
+3.3 Termination by Owner for Convenience: Owner may terminate this Contract, in whole or part, for convenience upon [CONVENIENCE_TERMINATION_NOTICE_DAYS] days' written notice. Contractor shall be paid for Work properly executed to date of termination, reasonable demobilization costs, but not anticipated profit on uncompleted Work.
+3.4 Liquidated Damages for Delay: If Contractor fails to achieve Substantial Completion by the agreed Contract Time (as adjusted by Change Orders), Contractor shall pay Owner {liquidated_damages_per_day} per calendar day of delay as liquidated damages, not as a penalty.""",
+                ContractArticle.INSURANCE_BONDING.value: """ARTICLE - INSURANCE AND BONDING REQUIREMENTS
+4.1 General Insurance: Contractor shall procure and maintain, at its sole expense, insurance coverages specified herein with insurers rated A-VII or better by A.M. Best, licensed in {governing_law}. Owner, its officers, and employees shall be named as additional insureds on CGL and Auto policies. Contractor shall provide Certificates of Insurance and endorsements to Owner before commencing Work. All policies shall provide for [DAYS_NOTICE_FOR_CANCELLATION] days' written notice to Owner of cancellation or material change.
+4.2 Required Insurance Coverages:
+{insurance_requirements_list}
+4.3 Bonding Requirements: Contractor shall furnish the following surety bonds from a surety acceptable to Owner:
+{bond_requirements_list}
+4.4 Failure to Maintain: If Contractor fails to procure/maintain required insurance/bonds, Owner may procure same and deduct cost from payments due Contractor, or declare default.""",
+                ContractArticle.SIGNATURE_BLOCKS.value: """ARTICLE - SIGNATURE BLOCKS
+IN WITNESS WHEREOF, the parties hereto, intending to be legally bound, have executed this Agreement by their duly authorized representatives as of the Effective Date first written in this Agreement (or if no such date, the date of last signature below).
 
-1.1 GENERAL REQUIREMENTS
-The Contractor shall provide all labor, materials, equipment, and services necessary for the complete execution of the project as specified in the contract documents.
+OWNER: {owner_name}                        CONTRACTOR: {contractor_name}
 
-1.2 WORK DESCRIPTION  
-The work includes but is not limited to:
-a) All activities specified in the project plans and specifications
-b) Coordination with utilities and regulatory agencies
-c) Compliance with all applicable codes and standards
-d) Site preparation and cleanup activities
-
-1.3 PERFORMANCE STANDARDS
-All work shall be performed in accordance with:
-a) Industry best practices and standards
-b) Applicable building codes and regulations  
-c) Project specifications and approved drawings
-d) Quality control and inspection requirements
-
-1.4 COMPLETION REQUIREMENTS
-Work shall be deemed complete when all specified deliverables are finished and accepted by the Owner in accordance with contract terms.
-""",
-
-            "Contract Price and Payment Terms": """
-ARTICLE - CONTRACT PRICE AND PAYMENT TERMS
-
-2.1 CONTRACT PRICE
-The total contract price is {contract_amount} for completion of all work specified in this contract.
-
-2.2 PAYMENT SCHEDULE
-Progress payments shall be made monthly based on work completed, less retainage of {retainage_percentage}.
-
-2.3 INVOICE PROCEDURES
-a) Contractor shall submit detailed monthly invoices
-b) Payment shall be made within 30 days of approved invoice
-c) All invoices must include supporting documentation
-
-2.4 FINAL PAYMENT
-Final payment shall be made upon substantial completion and acceptance of all work, release of liens, and satisfaction of warranty requirements.
-
-2.5 RETAINAGE RELEASE
-Retainage shall be released upon final completion and expiration of applicable warranty periods.
-""",
-
-            "Default and Termination": """
-ARTICLE - DEFAULT AND TERMINATION
-
-3.1 EVENTS OF DEFAULT
-Default by Contractor includes but is not limited to:
-a) Failure to commence work within specified time
-b) Failure to maintain project schedule
-c) Breach of contract terms and conditions
-d) Insolvency or assignment for benefit of creditors
-
-3.2 NOTICE AND CURE
-Written notice of default shall be provided with opportunity to cure within 10 calendar days.
-
-3.3 REMEDIES
-Upon uncured default, Owner may:
-a) Complete work using other contractors
-b) Withhold payments due
-c) Collect liquidated damages of ${liquidated_damages} per day of delay
-d) Pursue all available legal remedies
-
-3.4 TERMINATION
-Either party may terminate this contract upon material breach by the other party, subject to notice and cure provisions.
+By: ____________________________________             By: ____________________________________
+   (Signature)                                          (Signature)
+Name: {owner_representative}                    Name: {contractor_representative}
+Title: [OWNER_REPRESENTATIVE_TITLE]                  Title: [CONTRACTOR_REPRESENTATIVE_TITLE]
+Date: _________________________________            Date: _________________________________
 """
-        }
-    
+            }
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
+
+    #Provides a resilient, general-purpose fallback template for a given article type, using broadly applicable contract placeholders.
     def _get_generic_template(self, article_type: str) -> str:
-        """Provide generic template for unspecified article types."""
-        return f"""
-ARTICLE - {article_type.upper()}
-
-This section contains standard provisions for the specified article. All terms and conditions are in accordance with applicable law and industry standards.
-
-All parties agree to perform their obligations in good faith and in accordance with the contract terms, applicable law, and industry best practices.
-"""
+        try:
+            return f"""ARTICLE - {article_type.upper()}
+1.1 General Provisions for {article_type}
+This Article outlines key terms and conditions related to {article_type}. All activities and obligations hereunder shall be performed in compliance with applicable laws, regulations, and the overall terms of this Agreement dated {{contract_date}} between {{owner_name}} and {{contractor_name}} for the {{project_name}}. The Project is of {{complexity}} complexity with an estimated duration of {{project_duration}}.
+1.2 Specific Requirements Pertaining to {article_type}
+Specific requirements concerning {article_type} include, but are not limited to, adherence to quality standards as detailed in {{quality_standards_list}}, compliance with all safety protocols per {{safety_requirements_list}}, and observance of building codes {{building_codes_list}}.
+1.3 Further Details and Coordination
+Further details regarding {article_type} may be found in specific appendices or addenda to this Agreement (e.g., [APPENDIX_REFERENCE_FOR_{article_type.replace(' ','_').upper()}] if applicable) or will be provided by the Owner's designated Representative, {{owner_representative}}. All parties agree to act in good faith and cooperate fully to fulfill the intent and requirements of this Article."""
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
 
 class SyntheticContractGenerator:
-    """
-    Main orchestrator class for synthetic construction contract generation.
-    Coordinates all components and manages the complete generation workflow.
-    """
-    
+    """Main orchestrator for synthetic contract generation."""
+    #Initializes all core components required for contract generation, including synthetic data creation, validation, LLM content generation, and fallback handling, with optional LLM API key and seed for reproducibility.
     def __init__(self, api_key: Optional[str] = None, seed: Optional[int] = None):
-        """
-        Initialize the complete contract generation system.
-        
-        Args:
-            api_key: Google Gemini API key for LLM generation
-            seed: Random seed for reproducible synthetic data
-        """
-        # Initialize all component systems
-        self.synthetic_generator = SyntheticDataGenerator(seed)
-        self.content_validator = ContentValidator()
-        self.llm_generator = LLMContentGenerator(api_key)
-        self.fallback_generator = FallbackGenerator()
-        
-        # Track generation statistics
-        self.generation_stats = {
-            'total_generated': 0,
-            'llm_successful': 0,
-            'fallback_used': 0,
-            'validation_issues': 0
-        }
-    
-    def generate_complete_contract(self, requirements: ContractRequirements) -> Dict[str, Any]:
-        logger.info(f"Starting contract generation for {requirements.project_type}")
-        
         try:
-            with st.status("Generating synthetic contract...", expanded=True) as status:
-                status.write("Generating synthetic contract data...")
+            self.synthetic_generator = SyntheticDataGenerator(seed)
+            self.content_validator = ContentValidator()
+            self.llm_generator = LLMContentGenerator(api_key)
+            self.fallback_generator = FallbackGenerator()
+            self.generation_stats = {
+                'total_contracts_generated_session': 0, 'llm_articles_attempted': 0,
+                'llm_articles_successful': 0, 'fallback_articles_used': 0,
+                'pii_validation_issues_found': 0, 'content_generation_failures': 0
+            }
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
+
+    #Generates a complete contract by synthesizing base data, producing requested articles with LLM or fallback, validating content, assembling final text, and returning the contract with detailed stats and logs.
+    def generate_complete_contract(self, requirements: ContractRequirements) -> Dict[str, Any]:
+        try:
+            logger.info(f"Starting contract generation for: {requirements.project_type}")
+            current_run_stats = {'llm_articles_attempted': 0, 'llm_articles_successful': 0, 'fallback_articles_used': 0, 'pii_validation_issues_found': 0, 'content_generation_failures': 0}
+
+            with st.status("Generating synthetic contract...", expanded=True) as status_bar:
+                status_bar.write("1. Generating base synthetic contract data...")
                 contract_data = self.synthetic_generator.generate_contract_data(requirements)
                 
                 generated_articles = {}
-                all_validation_issues = []
-                
-                for article_name in requirements.selected_articles:
-                    status.write(f"Generating article: {article_name}")
-                    article_content, issues = self._generate_single_article(
-                        article_name, requirements, contract_data
+                all_contract_issues_log = []
+                total_articles = len(requirements.selected_articles)
+
+                for i, article_name in enumerate(requirements.selected_articles):
+                    status_bar.write(f"2.{i+1}/{total_articles} Generating: '{article_name}'...")
+                    article_content, pii_issues, generation_failed = self._generate_single_article(
+                        article_name, requirements, contract_data, current_run_stats
                     )
                     generated_articles[article_name] = article_content
-                    all_validation_issues.extend(issues)
-                    
-                    for issue in issues:
-                        status.write(f"⚠️ {issue}")
+                    all_contract_issues_log.extend(pii_issues)
+                    if pii_issues:
+                        for issue_msg in pii_issues: status_bar.write(f"   ⚠️ Validation: {issue_msg}")
+                    if generation_failed:
+                        all_contract_issues_log.append(f"Generation FAILED for article: {article_name}")
+                        status_bar.write(f" ❌ Generation FAILED for '{article_name}'. Check logs.")
+                    else:
+                        status_bar.write(f" ✅ Content for '{article_name}' generated.")
                 
-                status.write("Assembling complete contract...")
-                complete_contract = self._assemble_complete_contract(
-                    generated_articles, contract_data, requirements
-                )
+                status_bar.write("3. Assembling complete contract document...")
+                complete_contract_text_raw = self._assemble_complete_contract(generated_articles, contract_data, requirements)
                 
-                status.write("Validating and anonymizing final contract...")
-                final_contract, final_issues = self.content_validator.validate_and_anonymize_content(
-                    complete_contract
-                )
-                all_validation_issues.extend(final_issues)
+                status_bar.write("4. Final validation pass on full contract...")
+                final_contract_text, final_pass_pii_issues = self.content_validator.validate_and_anonymize_content(complete_contract_text_raw)
+                all_contract_issues_log.extend(final_pass_pii_issues)
+                current_run_stats['pii_validation_issues_found'] += len(final_pass_pii_issues)
+                if final_pass_pii_issues: status_bar.write(f" ⚠️ Final validation found {len(final_pass_pii_issues)} more PII/sensitive items.")
                 
-                for issue in final_issues:
-                    status.write(f"⚠️ {issue}")
-                
-                self.generation_stats['total_generated'] += 1
-                if all_validation_issues:
-                    self.generation_stats['validation_issues'] += 1
-                
-                status.write("Contract generation complete!")
-                
+                self.generation_stats['total_contracts_generated_session'] += 1
+                for key in current_run_stats:
+                    self.generation_stats[key] = self.generation_stats.get(key,0) + current_run_stats[key]
+
+                status_bar.write("✅ Contract generation complete!")
+                status_bar.update(label="Contract Generation Successful!", state="complete")
+
                 return {
-                    'contract_text': final_contract,
-                    'contract_data': asdict(contract_data),
-                    'requirements': asdict(requirements),
-                    'validation_issues': all_validation_issues,
+                    'contract_text': final_contract_text, 'contract_data': asdict(contract_data),
+                    'requirements_used': asdict(requirements), 'all_issues_log': all_contract_issues_log,
                     'metadata': {
-                        'generation_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        'articles_generated': len(generated_articles),
-                        'total_validation_issues': len(all_validation_issues),
-                        'contract_length': len(final_contract.split()),
-                        'generation_method': 'hybrid_llm_fallback'
+                        'generation_timestamp_utc': datetime.now(UTC).isoformat() + "Z",
+                        'articles_requested_count': total_articles,
+                        'articles_generated_count': len(generated_articles),
+                        'pii_validation_issues_count_this_run': current_run_stats['pii_validation_issues_found'],
+                        'content_generation_failure_count_this_run': current_run_stats['content_generation_failures'],
+                        'estimated_word_count': len(final_contract_text.split()),
+                        'primary_generation_method': 'LLM (Fallback available)' if self.llm_generator.is_initialized else 'Template-based Only'
                     },
-                    'statistics': self.generation_stats.copy()
+                    'generation_run_stats': current_run_stats 
                 }
-                
         except Exception as e:
-            logger.error(f"Contract generation failed: {e}")
-            st.error(f"Contract generation failed: {str(e)}")
-            raise Exception(f"Failed to generate contract: {str(e)}")
-    
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            if 'st' in sys.modules and 'status_bar' in locals(): status_bar.update(label="Contract Generation Failed!", state="error")
+            raise
+
+    # Generates and validates content for a single article using LLM or fallback templates, tracking stats and errors.
     def _generate_single_article(self, article_name: str, requirements: ContractRequirements,
-                               contract_data: GeneratedContractData) -> Tuple[str, List[str]]:
-        """
-        Generate a single contract article with validation and anonymization.
-        Attempts LLM generation first, falls back to templates if needed.
-        
-        Args:
-            article_name: Name of article to generate
-            requirements: Contract requirements for context
-            contract_data: Synthetic contract data for personalization
-            
-        Returns:
-            Tuple of (generated_content, validation_issues_found)
-        """
-        validation_issues = []
-        raw_content = ""  # Initialize as empty string
-        
+                               contract_data: GeneratedContractData, run_stats: Dict[str, int]) -> Tuple[str, List[str], bool]:
         try:
-            if self.llm_generator.model and self.llm_generator.is_initialized:
-                logger.info(f"Generating {article_name} using LLM")
-                raw_content = self.llm_generator.generate_article_content(
-                    article_name, requirements, contract_data
-                )
-                self.generation_stats['llm_successful'] += 1
+            pii_validation_issues = []
+            raw_content = ""
+            generation_failed_flag = False
+
+            if self.llm_generator.is_initialized and self.llm_generator.model:
+                run_stats['llm_articles_attempted'] += 1
+                try:
+                    raw_content = self.llm_generator.generate_article_content(article_name, requirements, contract_data)
+                    if raw_content and not raw_content.strip().startswith("ARTICLE -") and \
+                       "[Content generation failed" not in raw_content and \
+                       "[CRITICAL ERROR: Fallback generation mechanism failed" not in raw_content and \
+                       "[Fallback content generation for this article encountered an error" not in raw_content:
+                        run_stats['llm_articles_successful'] += 1
+                    else:
+                        logger.warning(f"LLM for '{article_name}' likely used internal fallback or failed to produce distinct content. Forcing explicit fallback.")
+                        raw_content = "" 
+                        run_stats['fallback_articles_used'] += 1
+                except Exception as e_llm:
+                    logger.error(f"LLM generation for '{article_name}' exception: {e_llm}. Using fallback.", exc_info=True)
+                    run_stats['fallback_articles_used'] += 1
+                    raw_content = ""
+            else:
+                run_stats['fallback_articles_used'] += 1
+                raw_content = ""
+            if not raw_content.strip():
+                try:
+                    logger.info(f"Executing explicit fallback generation for article: {article_name}")
+                    raw_content = self.fallback_generator.generate_fallback_article(article_name, requirements, contract_data)
+                    if "[Content generation for this article encountered an error" in raw_content or \
+                       "[Fallback content generation for this article encountered an error" in raw_content or \
+                       "[CRITICAL ERROR: Fallback generation mechanism failed" in raw_content or \
+                       "[Fallback content generation failed due to template key error" in raw_content:
+                        logger.error(f"Fallback generation for {article_name} reported an internal error in its output.")
+                        generation_failed_flag = True
+                        run_stats['content_generation_failures'] += 1
+                except Exception as fallback_e:
+                    logger.error(f"Explicit fallback generation critically failed for '{article_name}': {fallback_e}", exc_info=True)
+                    raw_content = f"ARTICLE - {article_name.upper()}\n\n[CRITICAL FAILURE: Both LLM (if attempted) and explicit fallback generation failed for this article. Error: {str(fallback_e)}]"
+                    generation_failed_flag = True
+                    run_stats['content_generation_failures'] += 1
+            
+            if not raw_content.strip():
+                logger.error(f"FATAL: No content at all generated for article {article_name}.")
+                raw_content = f"ARTICLE - {article_name.upper()}\n\n[ULTIMATE ERROR: NO CONTENT WAS GENERATED. MANUAL INPUT REQUIRED.]"
+                generation_failed_flag = True
+                run_stats['content_generation_failures'] += 1
+
+            validated_content, pii_issues_from_validation = self.content_validator.validate_and_anonymize_content(raw_content)
+            pii_validation_issues.extend(pii_issues_from_validation)
+            return validated_content, pii_validation_issues, generation_failed_flag
         except Exception as e:
-            logger.warning(f"LLM generation failed for {article_name}: {e}")
-            logger.info(f"Using fallback generation for {article_name}")
-            try:
-                raw_content = self.fallback_generator.generate_fallback_article(
-                    article_name, requirements, contract_data
-                )
-                self.generation_stats['fallback_used'] += 1
-            except Exception as fallback_e:
-                logger.error(f"Fallback generation failed for {article_name}: {fallback_e}")
-                raw_content = f"ARTICLE - {article_name}\n\n[Content generation failed. Please review and manually populate this section.]"
-                validation_issues.append(f"Fallback generation failed for {article_name}")
-        
-        if not raw_content:
-            raw_content = f"ARTICLE - {article_name}\n\n[No content generated. Please review and manually populate this section.]"
-            validation_issues.append(f"No content generated for {article_name}")
-        
-        logger.info(f"Raw content for {article_name}: {raw_content[:100]}...")  # Log first 100 chars for debugging
-        validated_content, issues = self.content_validator.validate_and_anonymize_content(raw_content)
-        validation_issues.extend(issues)
-        
-        return validated_content, validation_issues
-    
-    def _assemble_complete_contract(self, articles: Dict[str, str], 
+            logger.error(f"Error in {get_error_location(self)} for article {article_name}: {str(e)}", exc_info=True)
+            run_stats['content_generation_failures'] +=1
+            return f"ARTICLE - {article_name.upper()}\n\n[UNHANDLED EXCEPTION during generation of this article: {str(e)}]", [], True
+
+    # Assembles the full contract text by combining a formatted header, table of contents, generated articles, and a closing footer.
+    def _assemble_complete_contract(self, articles: Dict[str, str],
                                   contract_data: GeneratedContractData,
                                   requirements: ContractRequirements) -> str:
-        """
-        Assemble individual articles into a complete contract document.
-        
-        Args:
-            articles: Dictionary of generated article content
-            contract_data: Contract data for header information
-            requirements: Contract requirements for context
+        try:
+            header = f"""================================================================================
+SYNTHETIC CONSTRUCTION AGREEMENT
+================================================================================
+Contract Identification Number: [CONTRACT_ID_PLACEHOLDER_{random.randint(10000,99999)}]
+Date of Agreement: {contract_data.contract_date}
+
+Between:
+The Owner:
+    Name:           {contract_data.owner_name}
+    Represented by: {contract_data.owner_representative}
+    Address:        [OWNER_ADDRESS_LINE_1_PLACEHOLDER], [OWNER_CITY_PLACEHOLDER], [OWNER_STATE_PROVINCE_PLACEHOLDER] [OWNER_POSTAL_CODE_PLACEHOLDER]
+And
+The Contractor:
+    Name:           {contract_data.contractor_name}
+    Represented by: {contract_data.contractor_representative}
+    Address:        {contract_data.contractor_address}
+
+For The Project:
+    Project Name:        {contract_data.project_name}
+    Project Location:    {requirements.location}
+    Project Description: {contract_data.project_description}
+
+Contract Sum: {contract_data.contract_amount} ({contract_data.contract_type})
+Contract Duration: {contract_data.project_duration}
+    Anticipated Start Date:     {contract_data.start_date}
+    Anticipated Completion Date: {contract_data.completion_date}
+
+Governing Law: {contract_data.governing_law}
+--------------------------------------------------------------------------------
+TABLE OF CONTENTS (Illustrative - Actual articles follow in order of selection)
+--------------------------------------------------------------------------------
+"""
+            contract_parts = [header]
+            toc_items = [f"Article {i+1} : {name}" for i, name in enumerate(requirements.selected_articles)]
+            contract_parts.append("\n".join(toc_items))
+            contract_parts.append("--------------------------------------------------------------------------------\n")
+
+            for i, article_name_key in enumerate(requirements.selected_articles):
+                content = articles.get(article_name_key, f"\nARTICLE {i+1} : {article_name_key.upper()}\n\n[CRITICAL ERROR: CONTENT FOR THIS ARTICLE WAS NOT FOUND IN GENERATED ARTICLES DICTIONARY - PLACEHOLDER]\n")
+                contract_parts.append(f"\n\n================================================================================\nARTICLE {i+1} : {article_name_key.upper()}\n================================================================================\n{content.strip()}\n")
             
-        Returns:
-            str: Complete assembled contract text
-        """
-        contract_parts = []
-        
-        # Contract header
-        contract_parts.append(f"""
-CONSTRUCTION CONTRACT
+            footer = f"""================================================================================
+END OF ARTICLES
+================================================================================
+IN WITNESS WHEREOF, the parties hereto have executed this Agreement by their duly authorized representatives as of the date first written above.
 
-Contract Date: {contract_data.contract_date}
-Project: {contract_data.project_name}
-Contract Amount: {contract_data.contract_amount}
+THE OWNER:                                       THE CONTRACTOR:
+{contract_data.owner_name}                              {contract_data.contractor_name}
+"""
+            contract_parts.append(footer)
+            return "\n".join(contract_parts)
+        except Exception as e:
+            logger.error(f"Error in {get_error_location(self)}: {str(e)}", exc_info=True)
+            raise
 
-PARTIES TO THE CONTRACT:
-
-OWNER: {contract_data.owner_name}
-Representative: {contract_data.owner_representative}
-
-CONTRACTOR: {contract_data.contractor_name}
-Address: {contract_data.contractor_address}
-Representative: {contract_data.contractor_representative}
-
-PROJECT DESCRIPTION:
-{contract_data.project_description}
-
-""")
-        
-        # Add each generated article
-        for article_name, content in articles.items():
-            contract_parts.append(f"\n{'='*80}\n")
-            contract_parts.append(f"{article_name.upper()}\n")
-            contract_parts.append(f"{'='*80}\n")
-            contract_parts.append(content)
-            contract_parts.append("\n")
-        
-        return "\n".join(contract_parts)
-
+#Transforms contract text by applying regex-based markdown formatting for placeholders, article headers, separators, lists, and lettered sub-items
 def preprocess_markdown(text: str) -> str:
-    """Preprocess contract text for better Markdown rendering."""
-    replacements = {
-        r'\[([A-Z_]+)\]': r'_\1_'  # Convert [PLACEHOLDER] to _PLACEHOLDER_
-    }
-    for pattern, replacement in replacements.items():
-        text = re.sub(pattern, replacement, text)
-    return text
+    try:
+        text = re.sub(r'(\[[A-Z0-9_]+(?:_[A-Z0-9_]+)*\])', r'**\1**', text)
+        text = re.sub(r'^ARTICLE\s+(\d+)\s+:\s+(.*)', r'### Article \1: \2', text, flags=re.MULTILINE | re.IGNORECASE)
+        text = re.sub(r'^(?:={5,}|-{5,})\s*$', r'---', text, flags=re.MULTILINE)
+        text = re.sub(r'^\s{2,}-\s+(.*)', r'* \1', text, flags=re.MULTILINE)
+        text = re.sub(r'^\s{2,}([a-z])\)\s+(.*)', lambda m: f"  {ord(m.group(1).lower()) - ord('a') + 1}. {m.group(2)}", text, flags=re.MULTILINE)
+        return text
+    except Exception as e:
+        logger.error(f"Error in {get_error_location()}: {str(e)}", exc_info=True) # No class instance
+        raise
 
+#Builds a multi-tabbed Streamlit UI for configuring, generating, viewing, analyzing, and exporting synthetic construction contracts using LLM or templates.
 def create_streamlit_interface():
-    st.set_page_config(
-        page_title="Synthetic Construction Contract Generator",
-        page_icon="🏗️",
-        layout="wide"
-    )
-    
-    st.title("🏗️ Enhanced Synthetic Construction Contract Generator")
-    st.markdown("Generate realistic synthetic construction contracts with privacy protection")
-    
-    if 'generated_contract' not in st.session_state:
-        st.session_state.generated_contract = None
-    if 'generation_complete' not in st.session_state:
-        st.session_state.generation_complete = False
-    if 'selected_articles' not in st.session_state:
-        st.session_state.selected_articles = []
-    
-    with st.sidebar:
-        st.header("Configuration")
-        api_key = st.text_input(
-            "Google Gemini API Key (Optional)", 
-            type="password",
-            help="Enter a valid Google Gemini API key for LLM generation. Leave empty to use template-based generation."
-        )
-        
-        use_seed = st.checkbox("Use Random Seed for Reproducibility")
-        seed_value = None
-        if use_seed:
-            seed_value = st.number_input("Random Seed", value=42, min_value=1, max_value=10000)
-    
-    tab1, tab2, tab3, tab4 = st.tabs(["Contract Setup", "Generated Contract", "Analytics", "Markdown Preview"])
-    
-    with tab1:
-        st.header("Contract Requirements")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            project_type = st.selectbox(
-                "Project Type",
-                [
-                    "Highway Construction and Reconstruction",
-                    "Bridge Design and Construction",
-                    "Municipal Water Treatment Facility", 
-                    "Educational Institution Building",
-                    "Public Safety Complex",
-                    "Airport Infrastructure Development",
-                    "Transit System Expansion",
-                    "Environmental Remediation Project",
-                    "Energy Infrastructure Installation",
-                    "Commercial Office Building"
-                ]
-            )
+    try:
+        st.set_page_config(page_title="Synthetic Contract Generator", page_icon="🏗️", layout="wide", initial_sidebar_state="expanded")
+        st.title(" Enhanced Synthetic Construction Contract Generator")
+        st.caption(f"Version 1.0.0 - Author: Mervin Joseph L - Date: {datetime.now().strftime('%B %Y')}")
+        st.markdown("---")
+        for key, default_val in [('generated_contract_result', None), ('generation_log', [])]:
+            if key not in st.session_state: st.session_state[key] = default_val
+
+        with st.sidebar:
+            st.header("⚙️ Configuration")
+            api_key_input = st.text_input("Google Gemini API Key (Optional)", type="password", help="Enables LLM-powered content. If empty, uses templates.")
+            if api_key_input: st.session_state.api_key = api_key_input # Store/update
+            elif 'api_key' in st.session_state and not api_key_input: del st.session_state.api_key # Clear if emptied
             
-            contract_value = st.number_input(
-                "Contract Value ($)",
-                min_value=50000,
-                max_value=50000000,
-                value=1000000,
-                step=50000,
-                format="%d"
-            )
-            
-            complexity_options = ["simple", "moderate", "complex", "mega"]
-            complexity_index = st.slider(
-                "Project Complexity (slide to select)",
-                min_value=0,
-                max_value=len(complexity_options)-1,
-                value=1
-            )
-            complexity = complexity_options[complexity_index]
-            st.write(f"Selected Complexity: **{complexity}**")
-        
-        with col2:
-            duration_days = st.number_input(
-                "Project Duration (Days)",
-                min_value=30,
-                max_value=1095,
-                value=365,
-                step=30
-            )
-            
-            location = st.text_input(
-                "Project Location",
-                value="Metropolitan Area Alpha"
-            )
-        
-        st.subheader("Select Contract Articles to Generate")
-        
-        available_articles = [
-            "Definitions and Interpretation",
-            "Scope of Work and Specifications", 
-            "Contract Price and Payment Terms",
-            "Time for Performance and Delays",
-            "Change Orders and Modifications",
-            "Quality Control and Inspections",
-            "Insurance and Bonding Requirements",
-            "Safety and Environmental Compliance",
-            "Default and Termination",
-            "Dispute Resolution",
-            "General Provisions",
-            "Signature Blocks"
-        ]
-        
-        col1, col2, col3 = st.columns(3)
-        articles_per_column = len(available_articles) // 3
-        
-        for i, article in enumerate(available_articles):
-            col = col1 if i < articles_per_column else col2 if i < 2 * articles_per_column else col3
-            with col:
-                is_checked = article in st.session_state.selected_articles
-                if st.checkbox(article, value=is_checked, key=f"article_{article}"):
-                    if article not in st.session_state.selected_articles:
-                        st.session_state.selected_articles.append(article)
+            use_seed_checkbox = st.checkbox("Set Random Seed for Reproducibility", value=False) # Default False
+            seed_value_input = None
+            if use_seed_checkbox:
+                seed_value_input = st.number_input("Random Seed Value", value=42, min_value=1, max_value=100000, step=1, key="seed_value_input_key")
+            st.markdown("---"); st.subheader("About")
+            st.info("This tool generates synthetic, anonymized construction contract text using Google Gemini LLM (if API key provided) or internal templates.")
+
+        tab_setup, tab_generated_contract, tab_analytics, tab_markdown = st.tabs(["📝 Contract Setup", "📄 Generated Contract", "📊 Analytics", "👁️ Markdown Preview"])
+
+        with tab_setup:
+            st.header("Contract Requirements Definition")
+            with st.form("contract_requirements_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    project_type_input = st.selectbox("Project Type", [ptype.value for ptype in ProjectComplexity] if False else ["Commercial Office Building", "Residential Development Complex", "Highway Construction", "Bridge Design", "Water Treatment Facility", "Educational Building", "Public Safety Complex", "Airport Development", "Transit Expansion", "Environmental Remediation", "Energy Installation", "Industrial Facility"], index=0, key="project_type_key")
+                    contract_value_input = st.number_input("Contract Value (USD)", 50000, 100_000_000, 2_500_000, 100_000, "%d", key="contract_value_key")
+                    complexity_options_map = {pc.name.replace("_", "-"): pc.value for pc in ProjectComplexity}
+                    complexity_display = st.select_slider("Project Complexity", list(complexity_options_map.keys()), "MODERATE", key="complexity_slider_key")
+                    complexity_input = complexity_options_map[complexity_display]
+                with col2:
+                    duration_days_input = st.number_input("Project Duration (Days)", 30, 1825, 365, 15, key="duration_days_key")
+                    location_input = st.text_input("Project General Location", "Southern District, Province Gamma", key="location_key")
+                    special_requirements_input_str = st.text_area("Special Requirements (one per line, optional)", placeholder="e.g., LEED Gold Certification\nPhased Occupancy Required", height=100, key="special_req_key")
+                    special_requirements_input = [s.strip() for s in special_requirements_input_str.splitlines() if s.strip()]
+
+                st.subheader("Select Contract Articles to Generate")
+                all_article_options_display = [article.value for article in ContractArticle]
+                default_selected_articles_display = [ContractArticle.DEFINITIONS.value, ContractArticle.SCOPE_OF_WORK.value, ContractArticle.CONTRACT_PRICE.value, ContractArticle.TIME_PERFORMANCE.value, ContractArticle.INSURANCE_BONDING.value, ContractArticle.DEFAULT_TERMINATION.value, ContractArticle.SIGNATURE_BLOCKS.value]
+                selected_articles_display_names = st.multiselect("Choose articles:", all_article_options_display, default=default_selected_articles_display, key="multiselect_articles_key")
+                submitted = st.form_submit_button("✨ Generate Synthetic Contract ✨", use_container_width=True, type="primary")
+
+            if submitted:
+                if not selected_articles_display_names: st.error("Please select at least one contract article.")
                 else:
-                    if article in st.session_state.selected_articles:
-                        st.session_state.selected_articles.remove(article)
+                    st.session_state.generation_log = ["Generation process initiated..."]
+                    with st.spinner("Hold tight! Crafting your synthetic contract... This may take a moment, especially with LLM."):
+                        try:
+                            current_requirements = ContractRequirements(project_type_input, int(contract_value_input), int(duration_days_input), location_input, complexity_input, selected_articles_display_names, special_requirements_input)
+                            current_api_key = st.session_state.get('api_key', None) # Get from session state
+                            contract_gen_instance = SyntheticContractGenerator(current_api_key, seed_value_input if use_seed_checkbox else None)
+                            if current_api_key and not contract_gen_instance.llm_generator.is_initialized: st.warning("LLM initialization failed (check API key/console). Proceeding with template-based generation.", icon="⚠️")
+                            elif not current_api_key: st.info("No API key provided. Using template-based generation for all articles.", icon="📄")
+                            result_dict = contract_gen_instance.generate_complete_contract(current_requirements)
+                            st.session_state.generated_contract_result = result_dict
+                            st.session_state.generation_log.append("Contract generation completed successfully!")
+                            st.success(f"Synthetic contract generated! PII/Validation issues found: {result_dict['metadata']['pii_validation_issues_count_this_run']}. Content Generation Failures: {result_dict['metadata']['content_generation_failure_count_this_run']}.")
+                        except Exception as e_form_submit:
+                            st.session_state.generation_log.append(f"Error: {str(e_form_submit)}")
+                            logger.error("Error during Streamlit form submission block:", exc_info=True)
+                            st.error(f"💥 An unexpected error occurred during contract generation: {str(e_form_submit)}")
+                            st.exception(e_form_submit) # Shows full traceback for dev
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if st.button("Select Common Articles"):
-                common_articles = [
-                    "Scope of Work and Specifications",
-                    "Contract Price and Payment Terms", 
-                    "Insurance and Bonding Requirements",
-                    "Default and Termination"
-                ]
-                st.session_state.selected_articles = common_articles
-                st.rerun()
-        
-        with col2:
-            if st.button("Select All Articles"):
-                st.session_state.selected_articles = available_articles.copy()
-                st.rerun()
-        
-        with col3:
-            if st.button("Clear All Selections"):
-                st.session_state.selected_articles = []
-                st.rerun()
-        
-        st.subheader("Additional Requirements")
-        special_requirements = st.text_area(
-            "Special Requirements (one per line)",
-            placeholder="Environmental impact assessment\nHistoric preservation compliance\nMinority business participation"
-        ).split('\n') if st.text_area(
-            "Special Requirements (one per line)",
-            placeholder="Environmental impact assessment\nHistoric preservation compliance\nMinority business participation"
-        ) else []
-        
-        if st.button("Generate Synthetic Contract", type="primary", use_container_width=True):
-            if not st.session_state.selected_articles:
-                st.error("Please select at least one contract article to generate.")
+        with tab_generated_contract:
+            st.header("View Generated Contract")
+            if st.session_state.generated_contract_result:
+                res = st.session_state.generated_contract_result; meta = res['metadata']
+                st.subheader("Contract Overview & Generation Stats")
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Articles Generated", meta['articles_generated_count'], help="Number of articles for which content was generated.")
+                col2.metric("Est. Word Count", meta['estimated_word_count'], help="Approximate word count of the full contract text.")
+                col3.metric("PII/Validation Issues", meta['pii_validation_issues_count_this_run'], help="Potential PII or sensitive data patterns flagged and anonymized in this run.")
+                col4.metric("Content Failures", meta['content_generation_failure_count_this_run'], help="Number of articles where content generation failed (LLM and Fallback).")
+
+                if res['all_issues_log']:
+                    with st.expander("Show Full Generation & Validation Log (includes PII anonymization messages)", expanded=False):
+                        for issue_entry in res['all_issues_log']: st.warning(f"LOG: {issue_entry}")
+                
+                st.subheader("Full Contract Text (Editable)")
+                editable_contract_text = st.text_area("Edit Contract Text:", value=res['contract_text'], height=600, key="editable_contract_text_area_key", help="You can make changes to the text here before downloading.")
+                if editable_contract_text != res['contract_text']: # If user edits
+                     st.session_state.generated_contract_result['contract_text'] = editable_contract_text # Update state
+                
+                current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                st.download_button(label="📥 Download as TXT", data=editable_contract_text, file_name=f"synthetic_contract_{current_time_str}.txt", mime="text/plain", use_container_width=True, key="download_txt_key")
+            else: st.info("No contract has been generated yet. Please use the 'Contract Setup' tab first.")
+
+        with tab_analytics:
+            st.header("Generation Analytics & Details")
+            if st.session_state.generated_contract_result:
+                res = st.session_state.generated_contract_result
+                stats = res.get('generation_run_stats', {})
+
+                st.subheader("Statistics for Last Generation Run")
+                if stats:
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("LLM Articles Attempted", stats.get('llm_articles_attempted', 'N/A'))
+                    with col2:
+                        st.metric("LLM Articles Successful", stats.get('llm_articles_successful', 'N/A'))
+                    with col3:
+                        st.metric("Fallback Articles Used", stats.get('fallback_articles_used', 'N/A'))
+                else:
+                    st.write("Detailed run statistics not available for this generation.")
+
+                st.subheader("Core Contract Data (Synthetic - Generated)")
+                contract_data_df = pd.DataFrame(list(res['contract_data'].items()), columns=['Field', 'Value'])
+                if 'Value' in contract_data_df.columns and contract_data_df['Value'].dtype == 'object':
+                     contract_data_df['Value'] = contract_data_df['Value'].astype(str)
+                st.dataframe(contract_data_df, use_container_width=True, hide_index=True, key="df_contract_data_key")
+
             else:
-                with st.spinner("Initializing contract generation..."):
-                    try:
-                        requirements = ContractRequirements(
-                            project_type=project_type,
-                            contract_value=contract_value,
-                            duration_days=duration_days,
-                            location=location,
-                            complexity=complexity,
-                            selected_articles=st.session_state.selected_articles,
-                            special_requirements=[req.strip() for req in special_requirements if req.strip()]
-                        )
-                        
-                        generator = SyntheticContractGenerator(
-                            api_key=api_key if api_key else None,
-                            seed=seed_value
-                        )
-                        
-                        if api_key and not generator.llm_generator.is_initialized:
-                            st.warning("LLM initialization failed. Using template-based generation. Please verify your Google Gemini API key.")
-                        
-                        result = generator.generate_complete_contract(requirements)
-                        
-                        st.session_state.generated_contract = result
-                        st.session_state.generation_complete = True
-                        
-                        st.success(f"Contract generated successfully! Generated {len(st.session_state.selected_articles)} articles.")
-                        st.info("Check the 'Generated Contract' or 'Markdown Preview' tabs to view your contract.")
-                        
-                    except Exception as e:
-                        st.error(f"Error generating contract: {str(e)}")
-                        logger.error(f"Contract generation error: {e}")
-    
-    with tab2:
-        st.header("Generated Contract")
-        
-        if st.session_state.generation_complete and st.session_state.generated_contract:
-            result = st.session_state.generated_contract
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Articles Generated", result['metadata']['articles_generated'])
-            with col2:
-                st.metric("Contract Length", f"{result['metadata']['contract_length']} words")
-            with col3:
-                st.metric("Validation Issues", result['metadata']['total_validation_issues'])
-            
-            if result['validation_issues']:
-                with st.expander("Validation Issues Found", expanded=False):
-                    for issue in result['validation_issues']:
-                        st.warning(issue)
-            
-            st.subheader("Contract Content")
-            contract_text = result['contract_text']
-            
-            edited_contract = st.text_area(
-                "Generated Contract (Editable)",
-                value=contract_text,
-                height=600,
-                help="You can edit the contract text here before downloading"
-            )
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.download_button(
-                    label="Download Contract (.txt)",
-                    data=edited_contract,
-                    file_name=f"synthetic_contract_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                    mime="text/plain"
-                )
-            
-            with col2:
-                json_data = {
-                    'contract_text': edited_contract,
-                    'metadata': result['metadata'],
-                    'contract_data': result['contract_data']
-                }
-                st.download_button(
-                    label="Download Full Data (.json)",
-                    data=json.dumps(json_data, indent=2),
-                    file_name=f"contract_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                    mime="application/json"
-                )
-        else:
-            st.info("No contract generated yet. Use the 'Contract Setup' tab to create a contract.")
-    
-    with tab3:
-        st.header("Generation Analytics")
-        
-        if st.session_state.generation_complete and st.session_state.generated_contract:
-            result = st.session_state.generated_contract
-            stats = result['statistics']
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("Generation Statistics")
-                st.write(f"**Total Contracts Generated:** {stats['total_generated']}")
-                st.write(f"**LLM Successful:** {stats['llm_successful']}")
-                st.write(f"**Fallback Used:** {stats['fallback_used']}")
-                st.write(f"**Validation Issues:** {stats['validation_issues']}")
-            
-            with col2:
-                st.subheader("Contract Details")
-                metadata = result['metadata']
-                st.write(f"**Generation Date:** {metadata['generation_date']}")
-                st.write(f"**Generation Method:** {metadata['generation_method']}")
-                st.write(f"**Articles Count:** {metadata['articles_generated']}")
-                st.write(f"**Word Count:** {metadata['contract_length']}")
-            
-            st.subheader("Synthetic Contract Data")
-            contract_data = result['contract_data']
-            
-            info_data = {
-                'Field': [
-                    'Project Name', 'Contract Amount', 'Duration', 
-                    'Start Date', 'Completion Date', 'Contract Type'
-                ],
-                'Value': [
-                    contract_data['project_name'],
-                    contract_data['contract_amount'], 
-                    contract_data['project_duration'],
-                    contract_data['start_date'],
-                    contract_data['completion_date'],
-                    contract_data['contract_type']
-                ]
-            }
-            
-            df = pd.DataFrame(info_data)
-            st.dataframe(df, use_container_width=True)
-            
-        else:
-            st.info("Generate a contract first to see analytics.")
-    
-    with tab4:
-        st.header("Markdown Preview")
-        
-        if st.session_state.generation_complete and st.session_state.generated_contract:
-            contract_text = preprocess_markdown(st.session_state.generated_contract['contract_text'])
-            st.markdown(contract_text, unsafe_allow_html=False)
-            
-            st.download_button(
-                label="Download Markdown (.md)",
-                data=contract_text,
-                file_name=f"synthetic_contract_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-                mime="text/markdown"
-            )
-        else:
-            st.info("No contract generated yet. Use the 'Contract Setup' tab to create a contract.")
+                st.info("Generate a contract first to see analytics and details.")
+
+        with tab_markdown:
+            st.header("Markdown Preview of Contract")
+            if st.session_state.generated_contract_result:
+                contract_text_for_md = st.session_state.generated_contract_result.get('contract_text', "")
+                if contract_text_for_md:
+                    processed_markdown = preprocess_markdown(contract_text_for_md)
+                    st.markdown(processed_markdown, unsafe_allow_html=False)
+                    st.download_button(label="📥 Download as Markdown (.md)", data=processed_markdown, file_name=f"synthetic_contract_markdown_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md", mime="text/markdown", use_container_width=True, key="download_md_key")
+                else: st.warning("Contract text is currently empty. Cannot generate Markdown preview.")
+            else: st.info("No contract generated yet. Use the 'Contract Setup' tab to create a contract.")
+    except Exception as e_interface:
+        logger.critical(f"Fatal error in create_streamlit_interface: {e_interface}", exc_info=True)
+        st.error(f"A critical application error occurred in the UI: {e_interface}. Please check the application logs for more details.")
+
 
 if __name__ == "__main__":
     try:
         create_streamlit_interface()
-    except Exception as e:
-        st.error(f"Application error: {str(e)}")
-        logger.error(f"Streamlit application error: {e}")
+    except Exception as e_main_block:
+        logger.critical(f"Fatal error running Streamlit application in __main__ block: {e_main_block}", exc_info=True)
+        if 'st' in sys.modules and hasattr(st, 'error'):
+            st.error(f"A critical application error occurred preventing the application from running: {e_main_block}. Please consult the logs.")
+        else:
+            print(f"FATAL ERROR in __main__ block: {e_main_block}")
